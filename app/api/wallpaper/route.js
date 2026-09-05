@@ -1,8 +1,18 @@
 import { ImageResponse } from 'next/og';
-
-export const runtime = 'edge';
+import { createClient } from 'redis';
 
 const MOSCOW_TZ = 'Europe/Moscow';
+
+let clientPromise;
+
+function getRedisClient() {
+  if (!clientPromise) {
+    const client = createClient({ url: process.env.REDIS_URL });
+    client.on('error', (err) => console.error('Redis Client Error', err));
+    clientPromise = client.connect().then(() => client);
+  }
+  return clientPromise;
+}
 
 const MONTH_NAMES = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -40,22 +50,14 @@ async function loadGoogleFont(text, weight) {
 }
 
 async function readMonthData(monthKey) {
-  const base = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!base || !token) return {};
-
-  const res = await fetch(`${base}/hgetall/sport:${monthKey}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  });
-  if (!res.ok) return {};
-  const data = await res.json();
-  const arr = data.result || [];
-  const map = {};
-  for (let i = 0; i < arr.length; i += 2) {
-    map[arr[i]] = arr[i + 1];
+  if (!process.env.REDIS_URL) return {};
+  try {
+    const redis = await getRedisClient();
+    return await redis.hGetAll(`sport:${monthKey}`);
+  } catch (e) {
+    console.error('Redis read error', e);
+    return {};
   }
-  return map;
 }
 
 export async function GET(request) {
