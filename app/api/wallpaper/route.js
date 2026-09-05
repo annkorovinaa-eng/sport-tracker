@@ -3,6 +3,13 @@ import { createClient } from 'redis';
 import fs from 'fs';
 import path from 'path';
 
+// Without this, Vercel/Next.js can cache the image response for a given
+// URL and keep serving a stale (already-out-of-date) picture even after
+// Redis changes — this route MUST be recomputed on every request.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 const MOSCOW_TZ = 'Europe/Moscow';
 
 let clientPromise;
@@ -261,6 +268,9 @@ export async function GET(request) {
         { name: 'DejaVu Sans', data: fontRegular, weight: 400, style: 'normal' },
         { name: 'DejaVu Sans', data: fontBold, weight: 700, style: 'normal' },
       ],
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      },
     }
   );
 }
