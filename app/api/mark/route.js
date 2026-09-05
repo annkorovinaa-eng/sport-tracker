@@ -1,5 +1,9 @@
 import { createClient } from 'redis';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 const MOSCOW_TZ = 'Europe/Moscow';
 
 let clientPromise;
@@ -69,5 +73,8 @@ export async function GET(request) {
     );
   }
 
-  return Response.json({ ok: true, date, done: done === '1' });
+  return Response.json(
+    { ok: true, date, done: done === '1' },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' } }
+  );
 }
