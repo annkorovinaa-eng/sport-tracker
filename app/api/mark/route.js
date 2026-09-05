@@ -40,13 +40,13 @@ export async function GET(request) {
   const doneParam = searchParams.get('done');
   if (doneParam === null) {
     return Response.json(
-      { ok: false, error: 'missing "done" param (use done=1 or done=0)' },
+      { ok: false, error: 'missing "done" param (use done=1, done=0, or done=clear)' },
       { status: 400 }
     );
   }
-  const done = ['1', 'true', 'yes', 'да'].includes(doneParam.toLowerCase())
-    ? '1'
-    : '0';
+  const lowerDone = doneParam.toLowerCase();
+  const isClear = ['clear', 'reset', 'unset', 'none'].includes(lowerDone);
+  const done = ['1', 'true', 'yes', 'да'].includes(lowerDone) ? '1' : '0';
 
   const dateParam = searchParams.get('date');
   const date = /^\d{4}-\d{2}-\d{2}$/.test(dateParam || '')
@@ -65,7 +65,11 @@ export async function GET(request) {
 
   try {
     const redis = await getRedisClient();
-    await redis.hSet(`sport:${monthKey}`, day, done);
+    if (isClear) {
+      await redis.hDel(`sport:${monthKey}`, day);
+    } else {
+      await redis.hSet(`sport:${monthKey}`, day, done);
+    }
   } catch (e) {
     return Response.json(
       { ok: false, error: 'failed to write to storage' },
@@ -74,7 +78,7 @@ export async function GET(request) {
   }
 
   return Response.json(
-    { ok: true, date, done: done === '1' },
+    { ok: true, date, done: isClear ? null : done === '1' },
     { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' } }
   );
 }
