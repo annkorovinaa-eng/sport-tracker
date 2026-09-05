@@ -1,6 +1,17 @@
-export const runtime = 'edge';
+import { createClient } from 'redis';
 
 const MOSCOW_TZ = 'Europe/Moscow';
+
+let clientPromise;
+
+function getRedisClient() {
+  if (!clientPromise) {
+    const client = createClient({ url: process.env.REDIS_URL });
+    client.on('error', (err) => console.error('Redis Client Error', err));
+    clientPromise = client.connect().then(() => client);
+  }
+  return clientPromise;
+}
 
 function moscowToday() {
   const now = new Date();
@@ -41,24 +52,17 @@ export async function GET(request) {
   const [year, month, day] = date.split('-');
   const monthKey = `${year}-${month}`;
 
-  const base = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!base || !token) {
+  if (!process.env.REDIS_URL) {
     return Response.json(
-      { ok: false, error: 'storage not configured (Upstash env vars missing)' },
+      { ok: false, error: 'storage not configured (REDIS_URL missing)' },
       { status: 500 }
     );
   }
 
-  const res = await fetch(
-    `${base}/hset/sport:${monthKey}/${day}/${done}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    }
-  );
-
-  if (!res.ok) {
+  try {
+    const redis = await getRedisClient();
+    await redis.hSet(`sport:${monthKey}`, day, done);
+  } catch (e) {
     return Response.json(
       { ok: false, error: 'failed to write to storage' },
       { status: 502 }
