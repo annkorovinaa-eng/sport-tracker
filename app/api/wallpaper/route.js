@@ -1,5 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { createClient } from 'redis';
+import fs from 'fs';
+import path from 'path';
 
 const MOSCOW_TZ = 'Europe/Moscow';
 
@@ -12,6 +14,17 @@ function getRedisClient() {
     clientPromise = client.connect().then(() => client);
   }
   return clientPromise;
+}
+
+let fontCache;
+function loadFonts() {
+  if (!fontCache) {
+    fontCache = {
+      regular: fs.readFileSync(path.join(process.cwd(), 'assets/fonts/DejaVuSans.ttf')),
+      bold: fs.readFileSync(path.join(process.cwd(), 'assets/fonts/DejaVuSans-Bold.ttf')),
+    };
+  }
+  return fontCache;
 }
 
 const MONTH_NAMES = [
@@ -30,23 +43,6 @@ function moscowNow() {
   }).formatToParts(now);
   const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
   return { year: Number(map.year), month: Number(map.month), day: Number(map.day) };
-}
-
-async function loadGoogleFont(text, weight) {
-  const url = `https://fonts.googleapis.com/css2?family=Noto+Sans:wght@${weight}&text=${encodeURIComponent(
-    text
-  )}`;
-  const cssRes = await fetch(url, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36',
-    },
-  });
-  const css = await cssRes.text();
-  const match = css.match(/src: url\(([^)]+)\) format\('(?:opentype|truetype)'\)/);
-  if (!match) throw new Error('Could not find font URL in Google Fonts CSS');
-  const fontRes = await fetch(match[1]);
-  return fontRes.arrayBuffer();
 }
 
 async function readMonthData(monthKey) {
@@ -73,7 +69,7 @@ export async function GET(request) {
   const habit = (searchParams.get('habit') || 'Спорт / йога').slice(0, 40);
 
   const { year, month, day: today } = moscowNow();
-  const monthParam = searchParams.get('month');
+  const monthParam = searchParams.get('month'); // optional override: YYYY-MM
   const targetYear = /^\d{4}-\d{2}$/.test(monthParam || '')
     ? Number(monthParam.slice(0, 4))
     : year;
@@ -86,7 +82,7 @@ export async function GET(request) {
   const dayMap = await readMonthData(monthKey);
 
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
-  const firstWeekday = (new Date(targetYear, targetMonth - 1, 1).getDay() + 6) % 7;
+  const firstWeekday = (new Date(targetYear, targetMonth - 1, 1).getDay() + 6) % 7; // Mon=0
 
   let doneCount = 0;
   let trackedCount = 0;
@@ -110,14 +106,7 @@ export async function GET(request) {
     weeks.push(flatCells.slice(i, i + 7));
   }
 
-  const headerText = `${habit.toUpperCase()} ${MONTH_NAMES[targetMonth - 1]} ${targetYear} ${WEEKDAY_LABELS.join(
-    ' '
-  )} ${doneCount} / ${trackedCount} дней 0123456789`;
-
-  const [fontRegular, fontBold] = await Promise.all([
-    loadGoogleFont(headerText, 400),
-    loadGoogleFont(headerText, 700),
-  ]);
+  const { regular: fontRegular, bold: fontBold } = loadFonts();
 
   const cellSize = Math.floor(width * 0.108);
   const gap = Math.floor(width * 0.022);
@@ -143,7 +132,7 @@ export async function GET(request) {
               display: 'flex',
               color: '#8E8E93',
               fontSize: Math.floor(width * 0.042),
-              fontFamily: 'Noto Sans',
+              fontFamily: 'DejaVu Sans',
               letterSpacing: 2,
               marginBottom: 8,
             }}
@@ -155,7 +144,7 @@ export async function GET(request) {
               display: 'flex',
               color: '#FFFFFF',
               fontSize: Math.floor(width * 0.072),
-              fontFamily: 'Noto Sans',
+              fontFamily: 'DejaVu Sans',
               fontWeight: 700,
               marginBottom: 6,
             }}
@@ -167,7 +156,7 @@ export async function GET(request) {
               display: 'flex',
               color: '#8E8E93',
               fontSize: Math.floor(width * 0.038),
-              fontFamily: 'Noto Sans',
+              fontFamily: 'DejaVu Sans',
               marginBottom: Math.floor(height * 0.03),
             }}
           >
@@ -185,7 +174,7 @@ export async function GET(request) {
                   justifyContent: 'center',
                   color: '#636366',
                   fontSize: Math.floor(width * 0.028),
-                  fontFamily: 'Noto Sans',
+                  fontFamily: 'DejaVu Sans',
                 }}
               >
                 {wd}
@@ -249,7 +238,7 @@ export async function GET(request) {
                         border,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontFamily: 'Noto Sans',
+                        fontFamily: 'DejaVu Sans',
                         fontWeight: cell.isToday ? 700 : 400,
                         fontSize: Math.floor(width * 0.032),
                         color: textColor,
@@ -269,8 +258,8 @@ export async function GET(request) {
       width,
       height,
       fonts: [
-        { name: 'Noto Sans', data: fontRegular, weight: 400, style: 'normal' },
-        { name: 'Noto Sans', data: fontBold, weight: 700, style: 'normal' },
+        { name: 'DejaVu Sans', data: fontRegular, weight: 400, style: 'normal' },
+        { name: 'DejaVu Sans', data: fontBold, weight: 700, style: 'normal' },
       ],
     }
   );
